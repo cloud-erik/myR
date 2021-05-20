@@ -1,0 +1,111 @@
+---
+title: "NYPD Shooting Incident Data"
+author: "cloud-erik"
+date: "20 5 2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Data Import
+
+First importing the "NYPD Shooting Incident Data (Historic)" Dataset as CSV file from <https://catalog.data.gov> and create a summary
+
+```{r import_data, echo=TRUE}
+url_source <- "https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv?accessType=DOWNLOAD"
+shootings <- read.csv(url_source)
+summary(shootings)
+```
+
+# cleaning up the data
+
+* loading lubridate and tidyverse libary
+* convert date and time column to one datetime
+* drop not needed columns X_COORD_CD, Y_COORD_CD, Lon_Lat, PRECINCT, JURISDICTION_CODE, LOCATION_DESC, BORO and keep only one location (Latitude, Longitude)
+
+After cleaning the data create again a summary
+
+```{r clean_data, echo=TRUE}
+library(lubridate)
+library(tidyverse)
+shootings <- shootings %>%
+  unite(OCCUR_DATE, OCCUR_DATE:OCCUR_TIME) %>%
+  mutate(OCCUR_DATE = mdy_hms(OCCUR_DATE)) %>%
+  select(-c(INCIDENT_KEY, BORO, X_COORD_CD, Y_COORD_CD, Lon_Lat, PRECINCT,
+    JURISDICTION_CODE, LOCATION_DESC)) %>%  
+  rename(Murder = "STATISTICAL_MURDER_FLAG")
+summary(shootings)
+```
+
+# Visulize
+
+Because the shootings are spatial data I decided to do first a visualization on a map to get a better overview if there are any clusters.
+
+first sort the data frame with murder at the tail to make sure that murder are not overprinted.
+```{r sorting, echo=TRUE}
+shootings <- shootings[order(shootings$Murder),]
+```
+
+## Map with shootings in blue and murder in red
+
+First I plot all shootings on a stamen map of New York, shootings without murder in blue and with murder in red.
+```{r map1, echo=TRUE}
+library(ggmap)
+library(ggplot2)
+myLocation<-c(-74.27, 40.5, -73.7, 40.92) # New York
+myMap <- get_stamenmap(bbox=myLocation, maptype="toner-lite", crop=TRUE)
+ggmap(myMap)+
+geom_point(aes(x=Longitude, y=Latitude), data=shootings, alpha=0.5, 
+           color=ifelse(shootings$Murder=="true", "red", "blue"), size = 1)
+```
+## Heatmap wihh shootings in blue and murder in red
+
+To make cluster more visual I visualize same data again with a heat-map starting from green up to shootings without murder in blue or with murder in red.
+
+```{r map2, echo=TRUE}
+ggmap(myMap)+
+stat_density2d(aes(x=Longitude, y=Latitude,fill=..level.., alpha=..level..),
+               data=shootings, geom="polygon")+
+scale_fill_gradient(low = "green", high = ifelse(shootings$Murder=="true", "red", "blue"))+
+theme(axis.ticks = element_blank(),
+axis.text = element_blank(),
+legend.position="none")
+```
+So it look that there happens significant more shootings and murder in the area of Brooklyn and Bronx than in the other areas.
+
+# Timeline
+
+To see if there is any trend over time I plotted data on a time-line aggregated by week.
+```{r timeline, echo=TRUE}
+library(timetk)
+shootings_byweek <- summarise_by_time(shootings, .date_var = OCCUR_DATE,
+                                      .by = "week", value = n())
+p <- ggplot(shootings_byweek, aes(x = OCCUR_DATE, y = value)) +
+geom_line(color="#69b3a2", size=1, alpha=0.9, linetype=1) +
+geom_point()
+p
+```
+It looks like these are some seasonal variances over the time and there is a peak of shootings in 2020.
+Take only Data from one four Years to show the seasonal variance.
+```{r timeline2014-2017, echo=TRUE}
+library(timetk)
+shootings_byweek2015 <- filter_by_time(shootings_byweek, .date_var = OCCUR_DATE,
+                                       .start_date = "2014-01-01", .end_date = "2017-12-31")
+p <- ggplot(shootings_byweek2015, aes(x = OCCUR_DATE, y = value)) +
+geom_line(color="#69b3a2", size=1, alpha=0.9, linetype=1) +
+geom_point()
+p
+```
+So it look that there happens more shootings during summer and lesser during winter time.
+
+# Bias
+Because shootings are surpassing events I expect that there is no great bias like in other criminal statistics with minor crime that could be e.g. somehow correlated with the presence of police. But I assume that shootings will be recognized always with or without police and so all shootings should be part of the official statistics.
+Also the correlation between murder and shootings without murder shows that there seems minor bias in the data.
+
+The spatial data should take into account the density of population in more detailed analysis.
+
+```{r esssionifo, echo=TRUE}
+sessionInfo()
+```
