@@ -1,2 +1,2 @@
 # myR
-R repository
+R repository for all kind of R tests an ddevelopment
