@@ -11,23 +11,27 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # Data Import
 
-First importing the COVID-19 Dataset as CSV file from JHU Github <https://github.com/CSSEGISandData/COVID-19/tree/master/csse_covid_19_data> and create a summary
+First importing the COVID-19 Dataset as CSV file from JHU Github <https://github.com/CSSEGISandData/COVID-19/tree/master/csse_covid_19_data> and teh population and population density from UN <https://population.un.org/wpp/Download/Standard/CSV/>.
 
 ```{r import_data, echo=TRUE}
 url_confirmed <- "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv"
 url_death <- "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_global.csv"
 url_recovered <- "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_recovered_global.csv"
 
+url_population <- "https://population.un.org/wpp/Download/Files/1_Indicators%20(Standard)/CSV_FILES/WPP2019_TotalPopulationBySex.csv"
+
 #check.names has to be FALSE because otherwise "/" will be replaced in Header names
 covid_confirmed <- read.csv(url_confirmed, header = TRUE, check.names = FALSE)
 covid_death <- read.csv(url_death, header = TRUE, check.names = FALSE)
 covid_recovered <- read.csv(url_recovered, header = TRUE, check.names = FALSE)
+population <- read.csv(url_population, header = TRUE, check.names = FALSE)
 #summary(covid_confirmed)
 #summary(covid_death)
 #summary(covid_recovered)
 ```
 
 Clean the date and join in into one table. "transpose" with pivot_loger the dates into rows, drop the lat and long columns, make date a date format, country a valid name and drop the Province by sum it by country.
+Keep in population only data from last year and current variant "Medium".
 
 ```{r cleaning, echo=TRUE}
 library(tidyverse)
@@ -61,11 +65,52 @@ covid_recovered <- covid_recovered %>%
 covid_data <- merge.data.frame(covid_confirmed, covid_death)
 covid_data <- merge.data.frame(covid_data, covid_recovered)
 
+# rename "US" in JHU Data with correct value "USA".
+covid_data[["Country"]][covid_data[["Country"]]=="US"] = "USA"
+
+#rename "Czechia" with "Czech Republic"
+covid_data[["Country"]][covid_data[["Country"]]=="Czechia"] = "Czech Republic"
+
+#rename "United Kingdom" with "UK"
+covid_data[["Country"]][covid_data[["Country"]]=="United Kingdom"] = "UK"
+
 summary(covid_data)
 
+population <- population %>%
+  filter(VarID == "2", Time == year(Sys.Date())-1) %>%
+  select(-c(LocID, VarID, Variant, Time, MidPeriod, PopMale, PopFemale)) %>%
+  rename(Country = "Location")
+
+#rename "United Kingdom" with "UK"
+population[["Country"]][population[["Country"]]=="United Kingdom"] = "UK"
+#rename "United States of America" with "USA"
+population[["Country"]][population[["Country"]]=="United States of America"] = "USA"
+#rename "Russian Federation" with "Russia"
+population[["Country"]][population[["Country"]]=="Russian Federation"] = "Russia"
+#rename "Iran (Islamic Republic of)" with "Iran"
+population[["Country"]][population[["Country"]]=="Iran (Islamic Republic of)"] = "Iran"
+#rename "Czech Republic" with "Czechia"
+population[["Country"]][population[["Country"]]=="Czech Republic"] = "Czechia"
+#rename "Brunei Darussalam" with "Brunei"
+population[["Country"]][population[["Country"]]=="Brunei Darussalam"] = "Brunei"
+#rename "Bolivia (Plurinational State of)" with "Bolivia"
+population[["Country"]][population[["Country"]]=="Bolivia (Plurinational State of)"] = "Bolivia"
+#rename "CÃ´te d'Ivoire" with "Cote d'Ivoire"
+population[["Country"]][population[["Country"]]=="CÃ´te d'Ivoire"] = "Cote d'Ivoire"
+#rename "Syrian Arab Republic" with "Syria"
+population[["Country"]][population[["Country"]]=="Syrian Arab Republic"] = "Syria"
+#rename "Venezuela (Bolivarian Republic of)" with "Venezuela"
+population[["Country"]][population[["Country"]]=="Venezuela (Bolivarian Republic of)"] = "Venezuela"
+#rename "Viet Nam" with "Vietnam"
+population[["Country"]][population[["Country"]]=="Viet Nam"] = "Vietnam"
+#rename "Viet Nam" with "Vietnam"
+population[["Country"]][population[["Country"]]=="Viet Nam"] = "Vietnam"
+
+covid_data <- merge.data.frame(covid_data, population, all.covid_data = TRUE)
 ```
 
 First plot a timeline
+
 ```{r timeline, echo=TRUE}
 library(timetk)
 
@@ -79,9 +124,90 @@ p <- ggplot(covid_data, aes(x = date)) +
   ggtitle("Covid19 over time")
 p
 ```
+
+Plot a map with confirmed cases
+
+```{r map_confirmed, echo=TRUE}
+library(ggmap)
+library(ggplot2)
+
+library(PBSmapping)
+library(maps)
+library(mapproj)
+
+# create new data frame with sum per region (Country)
+covid_region <- covid_data %>%
+  rename(region = "Country") %>%
+  group_by(region) %>% summarise(confirmed = max(confirmed),
+                                  death = max(death),
+                                  recovered = max(recovered),
+                                  PopTotal = max(PopTotal),
+                                  PopDensity = max(PopDensity)) %>%
+  mutate(conf_per_pop = confirmed / PopTotal,
+         death_per_pop = death / PopTotal,
+         rec_per_pop = recovered / PopTotal)
+
+myLocation<-c(-180, -60, 179, 85) # World
+nMap <- get_stamenmap(bbox=myLocation, maptype="toner-lite", zoom=2)
+
+#get country polygon data
+mapdata <- map_data("world")
+mapdata <- left_join(mapdata, covid_region, by="region")
+
+#get bounding box for map
+bb<-attr(nMap, "bb");
+ylim<-c(bb$ll.lat, bb$ur.lat)
+xlim<-c(bb$ll.lon, bb$ur.lon)
+
+#clip polygons to map
+colnames(mapdata)[1:6] <- c("X","Y","PID","POS","region","subregion")
+mapdata<-clipPolys(mapdata, xlim=xlim, ylim=ylim, keepExtra=TRUE)
+
+#plot map overlay
+ggmap(nMap)+coord_map(xlim=xlim,ylim=ylim) +
+#    geom_polygon(data=mapdata, aes(x=X, y=Y, group=PID, fill=confirmed), alpha=0.9) +
+    geom_polygon(data=mapdata, aes(x=X, y=Y, group=PID, fill=conf_per_pop), alpha=0.9) +  
+    ggthemes::theme_map() +
+    ggtitle("Confirmed Covid cases per 1000 population") +
+    scale_fill_gradient(low = "yellow", high = "red", na.value = NA)
+
+
+```
+
+Plot a map with death cases
+
+```{r map_death, echo=TRUE}
+
+#plot map overlay
+ggmap(nMap)+coord_map(xlim=xlim,ylim=ylim) +
+    #geom_polygon(data=mapdata, aes(x=X, y=Y, group=PID, fill=death), alpha=0.9) +
+    geom_polygon(data=mapdata, aes(x=X, y=Y, group=PID, fill=death_per_pop), alpha=0.9) +
+    ggthemes::theme_map() +
+    ggtitle("Death Covid cases per 1000 population") +
+    scale_fill_gradient(low = "grey", high = "black", na.value = NA)
+
+
+```
+
+Plot a map with recovered cases
+
+```{r map_recovered, echo=TRUE}
+
+#plot map overlay
+ggmap(nMap)+coord_map(xlim=xlim,ylim=ylim) +
+    #geom_polygon(data=mapdata, aes(x=X, y=Y, group=PID, fill=recovered), alpha=0.9) +
+    geom_polygon(data=mapdata, aes(x=X, y=Y, group=PID, fill=rec_per_pop), alpha=0.9) +
+    ggthemes::theme_map() +
+    ggtitle("Recovered Covid cases per 1000 population") +
+    scale_fill_gradient(low = "yellow", high = "green", na.value = NA)
+
+
+```
+
 # Bias
 There is plenty room of bias within the covid 19 data. First its collected all over the world from different organizations which could lead to offset and errors. Also the figures strongly depend on the infrastructure and the willing within a specific region to collect the data. e.g. there must be sufficient test capacity available and the people must be willing to be tested. Therefore its not reliable to compare e.g. figures from highly developed countries with huge testing capacity with countries where almost no health care system is in place.
 In some areas also political effects influence the data like wars or if no data is shared.
+And of course the values are absolute and have to be weighted or set in correlation of the population of the country.
 
 ```{r esssionifo, echo=TRUE}
 sessionInfo()
