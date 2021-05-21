@@ -22,9 +22,9 @@ url_recovered <- "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/mast
 covid_confirmed <- read.csv(url_confirmed, header = TRUE, check.names = FALSE)
 covid_death <- read.csv(url_death, header = TRUE, check.names = FALSE)
 covid_recovered <- read.csv(url_recovered, header = TRUE, check.names = FALSE)
-summary(covid_confirmed)
-summary(covid_death)
-summary(covid_recovered)
+#summary(covid_confirmed)
+#summary(covid_death)
+#summary(covid_recovered)
 ```
 
 Clean the date and join in into one table. "transpose" with pivot_loger the dates into rows, drop the lat and long columns, make date a date format, country a valid name and drop the Province by sum it by country.
@@ -76,10 +76,12 @@ p <- ggplot(covid_data, aes(x = date)) +
   geom_line(color="blue", size=1, alpha=0.5, linetype=1, aes(y = death)) +
 #geom_point(color="darkorchid4") +
   labs(x="Date") +
-  ggtitle("Covid-19 over time")
+  ggtitle("Covid19 over time")
 p
 ```
-
+# Bias
+There is plenty room of bias within the covid 19 data. First its collected all over the world from different organizations which could lead to offset and errors. Also the figures strongly depend on the infrastructure and the willing within a specific region to collect the data. e.g. there must be sufficient test capacity available and the people must be willing to be tested. Therefore its not reliable to compare e.g. figures from highly developed countries with huge testing capacity with countries where almost no health care system is in place.
+In some areas also political effects influence the data like wars or if no data is shared.
 
 ```{r esssionifo, echo=TRUE}
 sessionInfo()
