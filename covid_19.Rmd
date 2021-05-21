@@ -25,13 +25,11 @@ covid_confirmed <- read.csv(url_confirmed, header = TRUE, check.names = FALSE)
 covid_death <- read.csv(url_death, header = TRUE, check.names = FALSE)
 covid_recovered <- read.csv(url_recovered, header = TRUE, check.names = FALSE)
 population <- read.csv(url_population, header = TRUE, check.names = FALSE)
-#summary(covid_confirmed)
-#summary(covid_death)
-#summary(covid_recovered)
+
 ```
 
 Clean the date and join in into one table. "transpose" with pivot_loger the dates into rows, drop the lat and long columns, make date a date format, country a valid name and drop the Province by sum it by country.
-Keep in population only data from last year and current variant "Medium".
+Keep in population only data from last year and current variant "2".
 
 ```{r cleaning, echo=TRUE}
 library(tidyverse)
@@ -65,6 +63,7 @@ covid_recovered <- covid_recovered %>%
 covid_data <- merge.data.frame(covid_confirmed, covid_death)
 covid_data <- merge.data.frame(covid_data, covid_recovered)
 
+# rename Countries to be able to merge the data later together
 # rename "US" in JHU Data with correct value "USA".
 covid_data[["Country"]][covid_data[["Country"]]=="US"] = "USA"
 
@@ -81,6 +80,7 @@ population <- population %>%
   select(-c(LocID, VarID, Variant, Time, MidPeriod, PopMale, PopFemale)) %>%
   rename(Country = "Location")
 
+# rename Countries to be able to merge the data later together
 #rename "United Kingdom" with "UK"
 population[["Country"]][population[["Country"]]=="United Kingdom"] = "UK"
 #rename "United States of America" with "USA"
@@ -116,10 +116,8 @@ library(timetk)
 
 p <- ggplot(covid_data, aes(x = date)) +
   geom_line(color="darkorchid4", size=1, alpha=0.5, linetype=1, aes(y = confirmed)) +
-#  geom_line(size=1, alpha=0.5, linetype=1, aes(y = confirmed, color=Country)) +
   geom_line(color="yellow", size=1, alpha=0.5, linetype=1, aes(y = recovered)) +
   geom_line(color="blue", size=1, alpha=0.5, linetype=1, aes(y = death)) +
-#geom_point(color="darkorchid4") +
   labs(x="Date") +
   ggtitle("Covid19 over time")
 p
@@ -165,7 +163,6 @@ mapdata<-clipPolys(mapdata, xlim=xlim, ylim=ylim, keepExtra=TRUE)
 
 #plot map overlay
 ggmap(nMap)+coord_map(xlim=xlim,ylim=ylim) +
-#    geom_polygon(data=mapdata, aes(x=X, y=Y, group=PID, fill=confirmed), alpha=0.9) +
     geom_polygon(data=mapdata, aes(x=X, y=Y, group=PID, fill=conf_per_pop), alpha=0.9) +  
     ggthemes::theme_map() +
     ggtitle("Confirmed Covid cases per 1000 population") +
@@ -180,12 +177,10 @@ Plot a map with death cases
 
 #plot map overlay
 ggmap(nMap)+coord_map(xlim=xlim,ylim=ylim) +
-    #geom_polygon(data=mapdata, aes(x=X, y=Y, group=PID, fill=death), alpha=0.9) +
     geom_polygon(data=mapdata, aes(x=X, y=Y, group=PID, fill=death_per_pop), alpha=0.9) +
     ggthemes::theme_map() +
     ggtitle("Death Covid cases per 1000 population") +
     scale_fill_gradient(low = "grey", high = "black", na.value = NA)
-
 
 ```
 
@@ -195,7 +190,6 @@ Plot a map with recovered cases
 
 #plot map overlay
 ggmap(nMap)+coord_map(xlim=xlim,ylim=ylim) +
-    #geom_polygon(data=mapdata, aes(x=X, y=Y, group=PID, fill=recovered), alpha=0.9) +
     geom_polygon(data=mapdata, aes(x=X, y=Y, group=PID, fill=rec_per_pop), alpha=0.9) +
     ggthemes::theme_map() +
     ggtitle("Recovered Covid cases per 1000 population") +
@@ -207,7 +201,7 @@ ggmap(nMap)+coord_map(xlim=xlim,ylim=ylim) +
 # Bias
 There is plenty room of bias within the covid 19 data. First its collected all over the world from different organizations which could lead to offset and errors. Also the figures strongly depend on the infrastructure and the willing within a specific region to collect the data. e.g. there must be sufficient test capacity available and the people must be willing to be tested. Therefore its not reliable to compare e.g. figures from highly developed countries with huge testing capacity with countries where almost no health care system is in place.
 In some areas also political effects influence the data like wars or if no data is shared.
-And of course the values are absolute and have to be weighted or set in correlation of the population of the country.
+And of course the values are absolute and have to be weighted or set in correlation of the population of the country. What was done by merging population data from UN into the dataset.
 
 ```{r esssionifo, echo=TRUE}
 sessionInfo()
