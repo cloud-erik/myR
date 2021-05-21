@@ -58,7 +58,8 @@ myLocation<-c(-74.27, 40.5, -73.7, 40.92) # New York
 myMap <- get_stamenmap(bbox=myLocation, maptype="toner-lite", crop=TRUE)
 ggmap(myMap)+
 geom_point(aes(x=Longitude, y=Latitude), data=shootings, alpha=0.5, 
-           color=ifelse(shootings$Murder=="true", "red", "blue"), size = 1)
+           color=ifelse(shootings$Murder=="true", "red", "blue"), size = 1) +
+ggtitle("Map of NYC shootings between 2006 and 2020")
 ```
 ## Heatmap wihh shootings in blue and murder in red
 
@@ -71,7 +72,8 @@ stat_density2d(aes(x=Longitude, y=Latitude,fill=..level.., alpha=..level..),
 scale_fill_gradient(low = "green", high = ifelse(shootings$Murder=="true", "red", "blue"))+
 theme(axis.ticks = element_blank(),
 axis.text = element_blank(),
-legend.position="none")
+legend.position="none") +
+ggtitle("Heatmap of NYC shootings between 2006 and 2020")
 ```
 So it look that there happens significant more shootings and murder in the area of Brooklyn and Bronx than in the other areas.
 
@@ -83,22 +85,47 @@ library(timetk)
 shootings_byweek <- summarise_by_time(shootings, .date_var = OCCUR_DATE,
                                       .by = "week", value = n())
 p <- ggplot(shootings_byweek, aes(x = OCCUR_DATE, y = value)) +
-geom_line(color="#69b3a2", size=1, alpha=0.9, linetype=1) +
-geom_point()
+geom_line(color="darkorchid4", size=1, alpha=0.9, linetype=1) +
+#geom_point(color="darkorchid4") +
+labs(x="Date") +
+ggtitle("Weekly NYC shootings between 2006 and 2020")
 p
 ```
 It looks like these are some seasonal variances over the time and there is a peak of shootings in 2020.
 Take only Data from one four Years to show the seasonal variance.
 ```{r timeline2014-2017, echo=TRUE}
-library(timetk)
 shootings_byweek2015 <- filter_by_time(shootings_byweek, .date_var = OCCUR_DATE,
                                        .start_date = "2014-01-01", .end_date = "2017-12-31")
-p <- ggplot(shootings_byweek2015, aes(x = OCCUR_DATE, y = value)) +
-geom_line(color="#69b3a2", size=1, alpha=0.9, linetype=1) +
-geom_point()
+p <- ggplot(shootings_byweek2015, aes(x = OCCUR_DATE, label=TRUE, y = value)) +
+geom_line(color="darkorchid4", size=1, alpha=0.9, linetype=1) +
+#geom_point() +
+labs(x="Date") +
+ggtitle("Weekly NYC shootings between 2014 and 2017")
 p
 ```
 So it look that there happens more shootings during summer and lesser during winter time.
+To verify this lets make a histogram of shootings by month.
+
+```{r monthly, echo=TRUE}
+shootings_bymonth <- summarise_by_time(shootings, .date_var = OCCUR_DATE,
+                                      .by = "month", value = n())
+p <- ggplot(shootings_bymonth, aes(x = month(OCCUR_DATE, label=TRUE), y = value)) +
+geom_bar(stat = "identity", fill = "darkorchid4") +
+labs(x="Month of year") +
+ggtitle("Summary of NYC shootings between 2006 and 2020 by month")
+p
+```
+
+Finally have a look at the time shootings happen. So create a histogram by hour of the day.
+```{r hourly, echo=TRUE}
+shootings_byhour <- summarise_by_time(shootings, .date_var = OCCUR_DATE,
+                                      .by = "hour", value = n())
+p <- ggplot(shootings_byhour, aes(x = hour(OCCUR_DATE), y = value)) +
+geom_bar(stat = "identity", fill = "darkorchid4") +
+labs(x="Time of day") +
+ggtitle("Summary of NYC shootings between 2006 and 2020 by Time of day")
+p
+```
 
 # Bias
 Because shootings are surpassing events I expect that there is no great bias like in other criminal statistics with minor crime that could be e.g. somehow correlated with the presence of police. But I assume that shootings will be recognized always with or without police and so all shootings should be part of the official statistics.
