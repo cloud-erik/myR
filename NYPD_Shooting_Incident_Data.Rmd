@@ -3,8 +3,8 @@ title: "NYPD Shooting Incident Data"
 author: "cloud-erik"
 date: "20 5 2021"
 output:
-  html_document: default
   pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -18,7 +18,7 @@ During analyses a second so far unknown question came up. That was if there is a
 
 I will address during this analyses both of theses questions.
 
-# Librarys
+# Libraries
 
 Load used library
 
@@ -45,7 +45,7 @@ summary(shootings)
 * convert date and time column to one datetime
 * drop not needed columns X_COORD_CD, Y_COORD_CD, Lon_Lat, PRECINCT, JURISDICTION_CODE, LOCATION_DESC, BORO and keep only one location (Latitude, Longitude)
 
-After cleaning the data create again a summary
+After cleaning the data create a summary
 
 ```{r clean_data}
 
@@ -98,6 +98,7 @@ So it look that there happens significant more shootings and murder in the area 
 # Timeline
 
 To see if there is any trend over time I plotted data on a time-line aggregated by week.
+
 ```{r timeline}
 shootings_byweek <- summarise_by_time(shootings, .date_var = OCCUR_DATE,
                                       .by = "week", value = n())
@@ -109,7 +110,8 @@ ggtitle("Weekly NYC shootings between 2006 and 2020")
 p
 ```
 It looks like these are some seasonal variances over the time and there is a peak of shootings in 2020.
-Take only Data from one four Years to show the seasonal variance.
+Take only Data from one four years to show the seasonal variance.
+
 ```{r timeline2014-2017}
 shootings_byweek2015 <- filter_by_time(shootings_byweek, .date_var = OCCUR_DATE,
                                        .start_date = "2014-01-01", .end_date = "2017-12-31")
@@ -134,6 +136,7 @@ p
 ```
 
 Finally have a look at the time shootings happen. So create a histogram by hour of the day.
+
 ```{r histogram_hourly}
 shootings_byhour <- summarise_by_time(shootings, .date_var = OCCUR_DATE,
                                       .by = "hour", value = n())

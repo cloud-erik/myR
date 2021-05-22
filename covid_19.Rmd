@@ -2,25 +2,55 @@
 title: "JHU CSSE COVID-19 Dataset analysis"
 author: "cloud-erik"
 date: "21 5 2021"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+```{r setup, include=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE)
+```
+
+# Question of interest
+
+I would like to show if the development of the Covid-19 cases over time in absolute as well as per population is different for different countries.
+
+Also I would address the question how the cases are globally distributed.
+
+# Libraries
+
+Load required libraries
+
+```{r library}
+library(tidyverse)
+library(lubridate)
+library(timetk)
+library(ggmap)
+library(ggplot2)
+library(PBSmapping)
+library(maps)
+library(mapproj)
+
 ```
 
 # Data Import
 
-First importing the COVID-19 Dataset as CSV file from JHU Github <https://github.com/CSSEGISandData/COVID-19/tree/master/csse_covid_19_data> and teh population and population density from UN <https://population.un.org/wpp/Download/Standard/CSV/>.
+First importing the COVID-19 Dataset as CSV file from JHU Github <https://github.com/CSSEGISandData/COVID-19/tree/master/csse_covid_19_data>.
 
-```{r import_data, echo=TRUE}
+The data is provided by Johns Hopkins University Center for Systems Science and Engineering (JHU CSSE): <https://systems.jhu.edu/>
+
+See also Lancet Article: "An interactive web-based dashboard to track COVID-19 in real time" <https://doi.org/10.1016/S1473-3099(20)30120-1>
+
+Because the dataset does not include information about population which is vital for comparison between countries I also imported the population and population density from UN <https://population.un.org/wpp/Download/Standard/CSV/>.
+
+```{r import_data}
 url_confirmed <- "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv"
 url_death <- "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_global.csv"
 url_recovered <- "https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_recovered_global.csv"
 
 url_population <- "https://population.un.org/wpp/Download/Files/1_Indicators%20(Standard)/CSV_FILES/WPP2019_TotalPopulationBySex.csv"
 
-#check.names has to be FALSE because otherwise "/" will be replaced in Header names
+#check.names has to be FALSE because otherwise "/" will be replaced in Header names and could later not converted correctly into date format
 covid_confirmed <- read.csv(url_confirmed, header = TRUE, check.names = FALSE)
 covid_death <- read.csv(url_death, header = TRUE, check.names = FALSE)
 covid_recovered <- read.csv(url_recovered, header = TRUE, check.names = FALSE)
@@ -28,13 +58,15 @@ population <- read.csv(url_population, header = TRUE, check.names = FALSE)
 
 ```
 
-Clean the date and join in into one table. "transpose" with pivot_loger the dates into rows, drop the lat and long columns, make date a date format, country a valid name and drop the Province by sum it by country.
-Keep in population only data from last year and current variant "2".
+# Data cleaning
 
-```{r cleaning, echo=TRUE}
-library(tidyverse)
-library(lubridate)
+Clean the data and join everything into one table. "transpose" with pivot_loger the dates into rows, drop the lat and long columns, make date a date format, give country column a valid name and drop the Province by sum it by country.
+Take population data only from last year and current variant "2".
+To merge data together I have to harmonize the country name because they are slightly different between the sources and what ggmap needs to plot it later on a map.
+At the end we have one table with all Covid cases, recoveries and death per country and day in absolute values and per population.
 
+
+```{r cleaning}
 covid_confirmed <- covid_confirmed %>%
   pivot_longer(cols = -c("Province/State", "Country/Region", "Lat", "Long"),
                names_to = "date", values_to = "confirmed") %>%
@@ -66,14 +98,12 @@ covid_data <- merge.data.frame(covid_data, covid_recovered)
 # rename Countries to be able to merge the data later together
 # rename "US" in JHU Data with correct value "USA".
 covid_data[["Country"]][covid_data[["Country"]]=="US"] = "USA"
-
 #rename "Czechia" with "Czech Republic"
 covid_data[["Country"]][covid_data[["Country"]]=="Czechia"] = "Czech Republic"
-
 #rename "United Kingdom" with "UK"
 covid_data[["Country"]][covid_data[["Country"]]=="United Kingdom"] = "UK"
-
-summary(covid_data)
+covid_data[["Country"]][covid_data[["Country"]]=="Taiwan*"] = "Taiwan"
+covid_data[["Country"]][covid_data[["Country"]]=="Korea*"] = "South Korea"
 
 population <- population %>%
   filter(VarID == "2", Time == year(Sys.Date())-1) %>%
@@ -89,8 +119,7 @@ population[["Country"]][population[["Country"]]=="United States of America"] = "
 population[["Country"]][population[["Country"]]=="Russian Federation"] = "Russia"
 #rename "Iran (Islamic Republic of)" with "Iran"
 population[["Country"]][population[["Country"]]=="Iran (Islamic Republic of)"] = "Iran"
-#rename "Czech Republic" with "Czechia"
-population[["Country"]][population[["Country"]]=="Czech Republic"] = "Czechia"
+population[["Country"]][population[["Country"]]=="Czechia"] = "Czech Republic"
 #rename "Brunei Darussalam" with "Brunei"
 population[["Country"]][population[["Country"]]=="Brunei Darussalam"] = "Brunei"
 #rename "Bolivia (Plurinational State of)" with "Bolivia"
@@ -105,33 +134,107 @@ population[["Country"]][population[["Country"]]=="Venezuela (Bolivarian Republic
 population[["Country"]][population[["Country"]]=="Viet Nam"] = "Vietnam"
 #rename "Viet Nam" with "Vietnam"
 population[["Country"]][population[["Country"]]=="Viet Nam"] = "Vietnam"
+population[["Country"]][population[["Country"]]=="United Republic of Tanzania"] = "Tanzania"
+population[["Country"]][population[["Country"]]=="China, Taiwan Province of China"] = "Taiwan"
+population[["Country"]][population[["Country"]]=="Republic of Moldova"] = "Moldova"
+population[["Country"]][population[["Country"]]=="Republic of Korea"] = "South Korea"
+#population[["Country"]][population[["Country"]]=="Democratic Republic of the Congo"] = "Republic of Congo"
 
+
+
+# Join together covid_data with population
 covid_data <- merge.data.frame(covid_data, population, all.covid_data = TRUE)
+
+# Add cases per population columns
+covid_data <- covid_data %>%
+  mutate(conf_per_pop = confirmed / PopTotal,
+         death_per_pop = death / PopTotal,
+         rec_per_pop = recovered / PopTotal)
+
+summary(covid_data)
+
 ```
 
-First plot a timeline
+# Development over time
 
-```{r timeline, echo=TRUE}
-library(timetk)
+Ee will have a look on the development over the time.
 
-p <- ggplot(covid_data, aes(x = date)) +
-  geom_line(color="darkorchid4", size=1, alpha=0.5, linetype=1, aes(y = confirmed)) +
-  geom_line(color="yellow", size=1, alpha=0.5, linetype=1, aes(y = recovered)) +
-  geom_line(color="blue", size=1, alpha=0.5, linetype=1, aes(y = death)) +
+## Absolut cases
+
+First plot a time line of total cases, recovered and Fatalities.
+
+```{r timeline_total}
+
+colors <- c("Confirmed cases" = "orange3", "Recovered cases" = "green4", "Fatalities" = "black")
+p <- ggplot(covid_data, aes(x = date, y = confirmed)) +
+  geom_line(size=1, alpha=0.7, linetype=1, aes(y = confirmed, color="Confirmed cases")) +
+  geom_line(size=1, alpha=0.7, linetype=1, aes(y = recovered, color="Recovered cases")) +
+  geom_line(size=1, alpha=0.7, linetype=1, aes(y = death, color="Fatalities")) +
   labs(x="Date") +
-  ggtitle("Covid19 over time")
+  ggtitle("Total Covid19 cases over time")+
+  scale_color_manual(values = colors)
 p
 ```
 
+## Cases per population
+
+Compare to the time line of cases per population
+
+```{r timeline_per_pop}
+p <- ggplot(covid_data, aes(x = date, y = confirmed)) +
+  geom_line(size=1, alpha=0.7, linetype=1, aes(y = conf_per_pop, color="Confirmed cases")) +
+  geom_line(size=1, alpha=0.7, linetype=1, aes(y = rec_per_pop, color="Recovered cases")) +
+  geom_line(size=1, alpha=0.7, linetype=1, aes(y = death_per_pop, color="Fatalities")) +
+  labs(x="Date") +
+  ggtitle("Covid19 cases per 1000 population over time")+
+  scale_color_manual(values = colors)
+
+p
+```
+
+## Cases per population of different countries
+
+Lets compare the development of Covid 19 cases and fatalities per population for some countries.
+
+```{r US_china}
+
+covid_US_CN <- covid_data %>%
+  filter(Country =="USA" |
+           Country == "China" |
+           Country == "India" |
+           Country == "Czech Republic" |
+           Country=="Germany")
+
+p1 <- ggplot(covid_US_CN, aes(x = date, y = conf_per_pop, colour = Country)) +
+  geom_line() + 
+  ggtitle("Covid19 cases per 1000 population over time")
+
+p1
+
+p2 <- ggplot(covid_US_CN, aes(x = date, y = death_per_pop, colour = Country)) +
+  geom_line() + 
+  ggtitle("Covid19 Fatalities per 1000 population over time")
+
+p2
+
+p3 <- ggplot(covid_US_CN, aes(x = date, y = rec_per_pop, colour = Country)) +
+  geom_line() + 
+  ggtitle("Covid19 recovered cases per 1000 population over time")
+
+p3
+```
+
+As we see, the ration between cases and fatalities are for the countries comparable, even on a different scale.
+
+# Global number of cases
+
+Next part is to have an overview of the global geographical distribution of cases.
+
+## Cases per population
+
 Plot a map with confirmed cases
 
-```{r map_confirmed, echo=TRUE}
-library(ggmap)
-library(ggplot2)
-
-library(PBSmapping)
-library(maps)
-library(mapproj)
+```{r map_confirmed}
 
 # create new data frame with sum per region (Country)
 covid_region <- covid_data %>%
@@ -161,48 +264,76 @@ xlim<-c(bb$ll.lon, bb$ur.lon)
 colnames(mapdata)[1:6] <- c("X","Y","PID","POS","region","subregion")
 mapdata<-clipPolys(mapdata, xlim=xlim, ylim=ylim, keepExtra=TRUE)
 
-#plot map overlay
+#plot map Confirmed Covid cases per 1000 population
 ggmap(nMap)+coord_map(xlim=xlim,ylim=ylim) +
     geom_polygon(data=mapdata, aes(x=X, y=Y, group=PID, fill=conf_per_pop), alpha=0.9) +  
     ggthemes::theme_map() +
     ggtitle("Confirmed Covid cases per 1000 population") +
-    scale_fill_gradient(low = "yellow", high = "red", na.value = NA)
+    scale_fill_gradient(low = "yellow", high = "red4", na.value = NA)
 
 
 ```
 
-Plot a map with death cases
+## Absolut number of Cases
 
-```{r map_death, echo=TRUE}
+Just to show the difference let's plot the same map with absolute number of cases, what could lead to wrong or distorted conclusion.
+The difference is clearly visible for e.g. USA or India which have a lot of Covid cases because of there big population and Czech Republic or Sweden the opposite.
 
-#plot map overlay
+```{r map_confirmed_absolut}
+
+#plot map Confirmed Covid cases absolute
+ggmap(nMap)+coord_map(xlim=xlim,ylim=ylim) +
+    geom_polygon(data=mapdata, aes(x=X, y=Y, group=PID, fill=confirmed), alpha=0.9) +  
+    ggthemes::theme_map() +
+    ggtitle("Confirmed Covid cases absolute") +
+    scale_fill_gradient(low = "yellow", high = "red4", na.value = NA)
+
+
+```
+
+## Fatalities per population
+
+Plot a map with fatalities
+
+```{r map_death}
+
+#plot map Death Covid cases per 1000 population
 ggmap(nMap)+coord_map(xlim=xlim,ylim=ylim) +
     geom_polygon(data=mapdata, aes(x=X, y=Y, group=PID, fill=death_per_pop), alpha=0.9) +
     ggthemes::theme_map() +
-    ggtitle("Death Covid cases per 1000 population") +
+    ggtitle("Covid Fatalities per 1000 population") +
     scale_fill_gradient(low = "grey", high = "black", na.value = NA)
 
 ```
 
+## Recovered cases per population
+
 Plot a map with recovered cases
 
-```{r map_recovered, echo=TRUE}
+```{r map_recovered}
 
-#plot map overlay
+#plot map Recovered Covid cases per 1000 population
 ggmap(nMap)+coord_map(xlim=xlim,ylim=ylim) +
     geom_polygon(data=mapdata, aes(x=X, y=Y, group=PID, fill=rec_per_pop), alpha=0.9) +
     ggthemes::theme_map() +
     ggtitle("Recovered Covid cases per 1000 population") +
-    scale_fill_gradient(low = "yellow", high = "green", na.value = NA)
+    scale_fill_gradient(low = "yellow", high = "green4", na.value = NA)
 
 
 ```
 
 # Bias
-There is plenty room of bias within the covid 19 data. First its collected all over the world from different organizations which could lead to offset and errors. Also the figures strongly depend on the infrastructure and the willing within a specific region to collect the data. e.g. there must be sufficient test capacity available and the people must be willing to be tested. Therefore its not reliable to compare e.g. figures from highly developed countries with huge testing capacity with countries where almost no health care system is in place.
-In some areas also political effects influence the data like wars or if no data is shared.
-And of course the values are absolute and have to be weighted or set in correlation of the population of the country. What was done by merging population data from UN into the dataset.
 
-```{r esssionifo, echo=TRUE}
+There is plenty room of bias within the covid 19 data. First its collected all over the world from different organizations which could lead to offset and errors. Also the figures strongly depend on the infrastructure and the willing within a specific region to collect the data. e.g. there must be sufficient test capacity available and the people must be willing to be tested. Therefore its not reliable to compare e.g. figures from highly developed countries with huge testing capacity with countries where almost no health care system is in place.
+In some areas also political effects influence the data like wars, suppression or if no data is shared.
+And of course the values are absolute and have to be weighted or set in correlation of the population of the country. What was here done by merging population data from UN into the dataset.
+
+# Conclusion
+
+The global distribution of Covid-19 cases is in absolute as well as in weighted cases per population very different. There are several reasons for that including different health care systems and testing capacity, political causes and  bias in data collection.
+On the other hand the ration between Cases, recovered cases is comparable even on a different scale.
+On teh timeline clearly the 
+
+```{r esssionifo}
 sessionInfo()
 ```
