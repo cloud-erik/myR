@@ -3,19 +3,38 @@ title: "NYPD Shooting Incident Data"
 author: "cloud-erik"
 date: "20 5 2021"
 output:
-  pdf_document: default
   html_document: default
+  pdf_document: default
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE)
+```
+
+# Question of interest
+
+After I saw the date first time my primary interest was to see if there is a correlation between number of shootings and the location. So to make clusters visible if there are some.
+During analyses a second so far unknown question came up. That was if there is any correlation to the season or time of day.
+
+I will address during this analyses both of theses questions.
+
+# Librarys
+
+Load used library
+
+```{r library}
+library(lubridate)
+library(tidyverse)
+library(ggmap)
+library(ggplot2)
+library(timetk)
 ```
 
 # Data Import
 
-First importing the "NYPD Shooting Incident Data (Historic)" Dataset as CSV file from <https://catalog.data.gov> and create a summary
+First importing the "NYPD Shooting Incident Data (Historic)" Dataset as CSV file from <https://catalog.data.gov> and create a summary.
 
-```{r import_data, echo=TRUE}
+```{r import_data}
 url_source <- "https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv?accessType=DOWNLOAD"
 shootings <- read.csv(url_source)
 summary(shootings)
@@ -23,15 +42,13 @@ summary(shootings)
 
 # cleaning up the data
 
-* loading lubridate and tidyverse libary
 * convert date and time column to one datetime
 * drop not needed columns X_COORD_CD, Y_COORD_CD, Lon_Lat, PRECINCT, JURISDICTION_CODE, LOCATION_DESC, BORO and keep only one location (Latitude, Longitude)
 
 After cleaning the data create again a summary
 
-```{r clean_data, echo=TRUE}
-library(lubridate)
-library(tidyverse)
+```{r clean_data}
+
 shootings <- shootings %>%
   unite(OCCUR_DATE, OCCUR_DATE:OCCUR_TIME) %>%
   mutate(OCCUR_DATE = mdy_hms(OCCUR_DATE)) %>%
@@ -46,16 +63,14 @@ summary(shootings)
 Because the shootings are spatial data I decided to do first a visualization on a map to get a better overview if there are any clusters.
 
 first sort the data frame with murder at the tail to make sure that murder are not overprinted.
-```{r sorting, echo=TRUE}
+```{r sorting}
 shootings <- shootings[order(shootings$Murder),]
 ```
 
-## Map with shootings in blue and murder in red
+## Map with shootings without murder in blue and with murder in red
 
 First I plot all shootings on a stamen map of New York, shootings without murder in blue and with murder in red.
-```{r map1, echo=TRUE}
-library(ggmap)
-library(ggplot2)
+```{r map_point}
 myLocation<-c(-74.27, 40.5, -73.7, 40.92) # New York
 myMap <- get_stamenmap(bbox=myLocation, maptype="toner-lite", crop=TRUE)
 ggmap(myMap)+
@@ -63,11 +78,12 @@ geom_point(aes(x=Longitude, y=Latitude), data=shootings, alpha=0.5,
            color=ifelse(shootings$Murder=="true", "red", "blue"), size = 1) +
 ggtitle("Map of NYC shootings between 2006 and 2020")
 ```
-## Heatmap wihh shootings in blue and murder in red
+
+## Heatmap wihh shootings without murder in blue and with murder in red
 
 To make cluster more visual I visualize same data again with a heat-map starting from green up to shootings without murder in blue or with murder in red.
 
-```{r map2, echo=TRUE}
+```{r heatmap}
 ggmap(myMap)+
 stat_density2d(aes(x=Longitude, y=Latitude,fill=..level.., alpha=..level..),
                data=shootings, geom="polygon")+
@@ -82,8 +98,7 @@ So it look that there happens significant more shootings and murder in the area 
 # Timeline
 
 To see if there is any trend over time I plotted data on a time-line aggregated by week.
-```{r timeline, echo=TRUE}
-library(timetk)
+```{r timeline}
 shootings_byweek <- summarise_by_time(shootings, .date_var = OCCUR_DATE,
                                       .by = "week", value = n())
 p <- ggplot(shootings_byweek, aes(x = OCCUR_DATE, y = value)) +
@@ -95,7 +110,7 @@ p
 ```
 It looks like these are some seasonal variances over the time and there is a peak of shootings in 2020.
 Take only Data from one four Years to show the seasonal variance.
-```{r timeline2014-2017, echo=TRUE}
+```{r timeline2014-2017}
 shootings_byweek2015 <- filter_by_time(shootings_byweek, .date_var = OCCUR_DATE,
                                        .start_date = "2014-01-01", .end_date = "2017-12-31")
 p <- ggplot(shootings_byweek2015, aes(x = OCCUR_DATE, label=TRUE, y = value)) +
@@ -108,7 +123,7 @@ p
 So it look that there happens more shootings during summer and lesser during winter time.
 To verify this lets make a histogram of shootings by month.
 
-```{r monthly, echo=TRUE}
+```{r histogram_monthly}
 shootings_bymonth <- summarise_by_time(shootings, .date_var = OCCUR_DATE,
                                       .by = "month", value = n())
 p <- ggplot(shootings_bymonth, aes(x = month(OCCUR_DATE, label=TRUE), y = value)) +
@@ -119,7 +134,7 @@ p
 ```
 
 Finally have a look at the time shootings happen. So create a histogram by hour of the day.
-```{r hourly, echo=TRUE}
+```{r histogram_hourly}
 shootings_byhour <- summarise_by_time(shootings, .date_var = OCCUR_DATE,
                                       .by = "hour", value = n())
 p <- ggplot(shootings_byhour, aes(x = hour(OCCUR_DATE), y = value)) +
@@ -135,6 +150,15 @@ Also the correlation between murder and shootings without murder shows that ther
 
 The spatial data should take into account the density of population in more detailed analysis.
 
-```{r esssionifo, echo=TRUE}
+A major bias is of course witch additional information is included within the data. So simply because e.g. race is included in the data it implies that there could be a correlation. That's in my opinion dangerous because it could lead to wrong and maybe discriminating results if its not cleaned and leveled carefully.
+
+# Conclusion
+
+Concerning the correlation between number of shootings and the location it is especially on a heat map clearly visible that there are two main areas where shootings without and also with murder happens most. One is in The Bronx and the other in north of Brooklyn.
+
+The outcome of the second question was really surprising to me, but it showed up, that there are significant more shootings in summer compared to winter. And even more prominent is the difference within the time of day. Between seven o'clock in the evening and four o'clock in the morning happens massive more shootings compared to the morning (6-11).
+
+
+```{r esssionifo}
 sessionInfo()
 ```
