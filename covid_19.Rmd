@@ -165,7 +165,10 @@ First plot a time line of total cases, recovered and Fatalities.
 
 ```{r timeline_total}
 
-colors <- c("Confirmed cases" = "orange3", "Recovered cases" = "green4", "Fatalities" = "black")
+colors <- c("Confirmed cases" = "orange3",
+            "Recovered cases" = "green4",
+            "Fatalities" = "black",
+            "Predicted Recovered cases" = "gray")
 p <- ggplot(covid_data, aes(x = date, y = confirmed)) +
   geom_line(size=1, alpha=0.7, linetype=1, aes(y = confirmed, color="Confirmed cases")) +
   geom_line(size=1, alpha=0.7, linetype=1, aes(y = recovered, color="Recovered cases")) +
@@ -191,6 +194,39 @@ p <- ggplot(covid_data, aes(x = date, y = confirmed)) +
 
 p
 ```
+
+### Model to predict Cases per population
+
+It looks like these is a strong relationship between the confirmed and recovered cases per population over time. Of lets check how good a linear model performs in predicting this.
+
+```{r timeline_per_pop_model}
+# create model
+cases_ppop.model <- lm(rec_per_pop~conf_per_pop, data=covid_data)
+
+# Show summary
+summary(cases_ppop.model)
+
+# Get slope an dintercept of model
+slope = as.numeric(cases_ppop.model$coefficients[2])
+intercept = as.numeric(cases_ppop.model$coefficients[1])
+
+# add predictaed data to the 
+covid_data <- covid_data %>%
+  mutate(pred_rec_per_pop = intercept + ( slope * conf_per_pop ))
+
+# Plot Data with the model
+p <- ggplot(covid_data, aes(x = date, y = confirmed)) +
+  geom_line(size=1, alpha=0.7, linetype=1, aes(y = conf_per_pop, color="Confirmed cases")) +
+  geom_line(size=1, alpha=0.7, linetype=1, aes(y = rec_per_pop, color="Recovered cases")) +
+  geom_line(size=1, alpha=0.7, linetype=1, aes(y = pred_rec_per_pop, color="Predicted Recovered cases")) +
+  labs(x="Date") +
+  ggtitle("Covid19 cases per 1000 population over time")+
+  scale_color_manual(values = colors)
+
+p
+```
+
+Prediction looks not to bad even if the for lower number of cases its predicting to high and for higher values to low values.
 
 ## Cases per population of different countries
 
@@ -332,7 +368,7 @@ And of course the values are absolute and have to be weighted or set in correlat
 
 The global distribution of Covid-19 cases is in absolute as well as in weighted cases per population very different. There are several reasons for that including different health care systems and testing capacity, political causes and  bias in data collection.
 On the other hand the ration between Cases, recovered cases is comparable even on a different scale.
-On teh timeline clearly the 
+On the time-line clearly the is a close relationship between the cases and recovered cases are visible. Also the created simple linear model performs quite good in predicting the recovered cases per poulation.
 
 ```{r esssionifo}
 sessionInfo()
