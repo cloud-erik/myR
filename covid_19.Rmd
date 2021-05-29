@@ -368,7 +368,7 @@ And of course the values are absolute and have to be weighted or set in correlat
 
 The global distribution of Covid-19 cases is in absolute as well as in weighted cases per population very different. There are several reasons for that including different health care systems and testing capacity, political causes and  bias in data collection.
 On the other hand the ration between Cases, recovered cases is comparable even on a different scale.
-On the time-line clearly the is a close relationship between the cases and recovered cases are visible. Also the created simple linear model performs quite good in predicting the recovered cases per poulation.
+On the time-line clearly the is a close relationship between the cases and recovered cases are visible. Also the created simple linear model performs quite good in predicting the recovered cases per population.
 
 ```{r esssionifo}
 sessionInfo()
